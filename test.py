@@ -20,13 +20,23 @@ global charLookup
 global colorBasic
 global colorDesert
 global colorHeatmap
+global colorsList
 global biomeNames
 
-charLookup = ".,-=+*#%@"
+charLookup = "~.,-=+*#%@"
 colorBasic   = [40, 179, 95, 23, 29, 41, 47, 248, 232, 190]
 colorDesert  = [46, 95, 173, 179, 215, 216, 217, 218, 95, 35]
 colorSnow    = [112, 240, 248, 249, 251, 253, 254, 232, 190, 184]
 colorHeatmap = [23, 35, 47, 107, 185, 179, 173, 167, 161, 166]
+colorsList = [colorBasic, colorDesert, colorSnow]
+
+"""
+colorBasic   = (40, 179, 95, 23, 29, 41, 47, 248, 232, 190)
+colorDesert  = (46, 95, 173, 179, 215, 216, 217, 218, 95, 35)
+colorSnow    = (112, 240, 248, 249, 251, 253, 254, 232, 190, 184)
+colorHeatmap = (23, 35, 47, 107, 185, 179, 173, 167, 161, 166)
+colorsList = (colorBasic, colorDesert, colorSnow)
+"""
 biomeNames = ["Plains", "Desert", "Snow"]
 
 # Used to store information about the world (to prevent constant recomputation)
@@ -45,13 +55,17 @@ global minScale
 global maxScale
 global movementScale
 global movementSpeed
+global termColorsList
+global landStorage
 
 ratio = 9.0 / 16.0
 scale = 64.0
 minScale = 32.0
 maxScale = 4096.0
-movementScale = 6.0
+movementScale = 1.0
 movementSpeed = movementScale / scale
+termColorsList = {}
+landStorage = {}
 
 # World generation details
 global randomSeed
@@ -84,6 +98,26 @@ yOffset = 0
 ### Helper functions generally used in this program
 ### (these don't typically rely on changing variables)
 ###
+
+## Debug class.
+## TODO: Make some sensical way of keeping track of strings on the screen;
+## this means updating them with values that change (fps, position, etc)
+## as well as ensuring they stay in the same order between updates.
+## The contract should state that the order is arbitrary but consistent.
+class Debug:
+    log = []
+
+    # Adds an arbitrary number of objects as a string to the debug stack.
+    def addString(strings):
+        finalString = ""
+        for s in strings:
+            finalString = finalString + str(s)
+        log.append(finalString)
+
+    # Prints all the debug strings to the provided screen.
+    def dump(stdscr):
+        for i in range(len(log)):
+            stdscr.addstr(i, 0, log[i])
 
 # Converts a float in the range [-1.0, 1.0] to a byte in the range [0, 255].
 def floatToByte(flt):
@@ -124,8 +158,25 @@ def floatToChar(flt):
     return byteToChar(floatToByte(flt))
 
 # Turns a [-1.0, 1.0) float to a character, using the land adjustments.
+#def floatToCharLand(flt):
+#    return byteToChar(floatToByteLand(flt))
+
+# Optimized version of float to char conversion.
+# WR2 is the water ratio moved to the [-1.0, 1.0] range;
+# WR3 is the ratio to normalize [WR2, 1.0] -> [-1.0, 1.0].
+# Note for further optimization: The if statements provide some overhead,
+# and the "else" statement is the slowest single statement. 
+WR2 = (waterRatio * 2.0) - 1.0
+WR3 = 1.0 / (1.0 - WR2)
 def floatToCharLand(flt):
-    return byteToChar(floatToByteLand(flt))
+    if flt < WR2:
+        return "~"
+    elif flt < -1.0:
+        return charLookup[0]
+    elif flt > 1.0:
+        return charLookup[-1]
+    else:
+        return charLookup[int(len(charLookup) * (flt - WR2) * WR3)]
 
 # This runs several iterations of perlin noise and sums the values.
 def octaves(x, y, iterations=1, scale=1.0, pers=2.0, normalize=True):
@@ -172,34 +223,27 @@ def biomeLookupByTP(temp, percip):
 
 # Provides the appropriate color given a biome and character.
 # This looks up biome -> colorscheme; colorscheme -> color.
+# Note on optimization: try/except is faster when expected to succeed.
+# An if/else would always check, so ends up giving a significant penalty here.
 def colorLookup(biome, char):
-    index = -1
     try:
-        index = charLookup.index(char) + 1
-    except ValueError:
-        if char == "~":
-            index = 0
-        pass
+        #index = charLookup.find(char)
+        #index = 0
+        #return curses.color_pair(colorsList[biome][charLookup.find(char)])
+        return termColorsList[colorsList[biome][charLookup.find(char)]]
+    except:
+        print("Color lookup failed; invalid biome value or character given.")
+        raise
 
-    # Return default color for invalid characters/biomes
-    if index == -1:
-        return 0
-
-    if biome == 0:
-        return curses.color_pair(colorBasic[index])
-    elif biome == 1:
-        return curses.color_pair(colorDesert[index])
-    elif biome == 2:
-        #return curses.color_pair(colorHeatmap[index])
-        return curses.color_pair(colorSnow[index])
-    else:
-        return 0
+# Creates a hash value to access a screen (x, y) coordinate in the dict
+def hashScreen(x, y):
+    return str(x) + "#" + str(y)
 
 ###
 ### Main methods used in the program. These depend on above variables/methods
 ###
 
-def redraw(stdscr):
+def redraw(stdscr, first=False):
     width = curses.COLS - 1
     height = curses.LINES
 
@@ -213,6 +257,11 @@ def redraw(stdscr):
             zValue = heightLookup(x, y)
             temp = tempLookup(x, y)
             biome = biomeLookupByTP(temp, 0)
+
+            # First time drawing, set up the dict
+            if first:
+                #landStorage[hashScreen(i, j)] = zValue
+                landStorage[(i * width) + j] = zValue
 
             # TODO: move the array and only update the values that are new
             # on the very edges. Don't update the entire 2D array every time
@@ -233,7 +282,7 @@ def redraw(stdscr):
     currentTemp = tempLookup(xOffset, yOffset)
     currentBiome = biomeLookup(xOffset, yOffset)
 
-    stdscr.addstr(0, 0, "World pos: (" + str(currentWorldX) + ", " + str(currentWorldY) + ")Map pos: (" + str(xOffset) + ", " + str(yOffset) + ") Scale: " + str(scale) + "x")
+    stdscr.addstr(0, 0, "World pos: (" + str(currentWorldX) + ", " + str(currentWorldY) + ") Map pos: (" + str(xOffset * maxScale) + ", " + str(yOffset * maxScale / ratio) + ") Scale: " + str(scale) + "x")
     stdscr.addstr(1, 0, "Height: " + str(currentHeight))
     stdscr.addstr(2, 0, "Biome: " + biomeNames[currentBiome])
     stdscr.addstr(3, 0, "Temperature: " + str(currentTemp))
@@ -245,6 +294,178 @@ def redraw(stdscr):
     curses.curs_set(0)
 
     stdscr.refresh()
+
+def moveRightN(stdscr, deltaX):
+    width = curses.COLS - 1
+    height = curses.LINES
+
+    global xOffset
+    global yOffset
+    global scale
+
+    shiftStart = time.time()
+    # Shift values over
+    deltaWidth = deltaX * width
+    for i in range(0, width - deltaX):
+        iTimes = i * width
+        for j in range(height):
+            index = iTimes + j
+            #landStorage[hashScreen(i, j)] = landStorage[hashScreen(i + deltaX, j)]
+            landStorage[index] = landStorage[deltaWidth + index]
+    shiftEnd = time.time()
+
+    genStart = time.time()
+    # Generate new values
+    for i in range(width - deltaX, width):
+        iTimes = i * width
+        for j in range(height):
+            index = iTimes + j
+            x = xOffset + ((i - width / 2) / scale)
+            y = yOffset + ((j - height / 2) / scale / ratio)
+
+            #landStorage[hashScreen(i, j)] = heightLookup(x, y)
+            landStorage[index] = heightLookup(x, y)
+    genEnd = time.time()
+
+    drawStart = time.time()
+    simpleRedraw(stdscr)
+    drawEnd = time.time()
+
+    stdscr.addstr(0, 0, "Shift time: " + str(shiftEnd - shiftStart))
+    stdscr.addstr(1, 0, "Generate time: " + str(genEnd - genStart))
+    stdscr.addstr(2, 0, "Draw time: " + str(drawEnd - drawStart))
+
+def moveLeftN(stdscr, deltaX):
+    width = curses.COLS - 1
+    height = curses.LINES
+
+    global xOffset
+    global yOffset
+    global scale
+
+    shiftStart = time.time()
+    # Shift values over
+    for i in range(width, -deltaX, -1):
+        for j in range(height):
+            landStorage[(i * height) + j] = landStorage[(i * height) + j + deltaX]
+    shiftEnd = time.time()
+
+    genStart = time.time()
+    # Generate new values
+    for i in range(0, deltaX):
+        for j in range(height):
+            x = xOffset + ((i - width / 2) / scale)
+            y = yOffset + ((j - height / 2) / scale / ratio)
+
+            landStorage[(i * width) + j] = heightLookup(x, y)           
+
+    simpleRedraw(stdscr)
+
+## TODO: moving left broke for some reason; add in moving vertically
+def moveX(stdscr, deltaX):
+    width = curses.COLS - 1
+    height = curses.LINES
+
+    global xOffset
+    global yOffset
+    global scale
+
+    srtX = 0
+    endX = width - deltaX
+    dirX = 1
+    genSrtX = width - deltaX
+    genEndX = width
+    deltaWidth = deltaX * width
+
+    if deltaX < 0:
+        srtX = width
+        endX = -deltaX
+        dirX = -1
+        genSrtX = 0
+        genEndX = deltaX
+
+    # Shift over old values
+    shiftStart = time.time()
+    for i in range(srtX, endX, dirX):
+        iTimes = i * width
+        for j in range(height):
+            index = iTimes + j
+            landStorage[index] = landStorage[deltaWidth + index] 
+    shiftEnd = time.time()
+
+    # Generate new values
+    genStart = time.time()
+    for i in range(genSrtX, genEndX):
+        iTimes = i * width
+        for j in range(height):
+            index = iTimes + j
+            x = xOffset + ((i - width / 2) / scale)
+            y = yOffset + ((j - height / 2) / scale / ratio)
+
+            landStorage[index] = heightLookup(x, y)
+    genEnd = time.time()
+
+    # Redraw
+    drawStart = time.time()
+    simpleRedraw(stdscr)
+    drawEnd = time.time()
+
+    stdscr.addstr(0, 0, "Shift time: " + str(shiftEnd - shiftStart))
+    stdscr.addstr(1, 0, "Generate time: " + str(genEnd - genStart))
+    stdscr.addstr(2, 0, "Draw time: " + str(drawEnd - drawStart))
+
+def simpleRedraw(stdscr):
+    width = curses.COLS - 1
+    height = curses.LINES
+
+    # Below is debugging code with times for everything
+    """
+    time1 = 0
+    time2 = 0
+    time3 = 0
+    time4 = 0
+    for i in range(width):
+        iTimes = i * width
+        for j in range(height):
+            index = iTimes + j
+            #zValue = landStorage[hashScreen(i, j)]
+
+            start1 = time.time()
+            zValue = landStorage[index]
+            end1 = time.time()
+            time1 = time1 + (end1 - start1)
+
+            start2 = time.time()
+            dispChar = floatToCharLand(zValue)
+            #dispChar = "#"
+            end2 = time.time()
+            time2 = time2 + (end2 - start2)
+
+            start3 = time.time()
+            color = colorLookup(0, dispChar)
+            end3 = time.time()
+            time3 = time3 + (end3 - start3)
+
+            start4 = time.time()
+            stdscr.addch(j, i, dispChar, color)
+            end4 = time.time()
+            time4 = time4 + (end4 - start4)
+
+    stdscr.addstr(2, 0, "Draw time: " + str(time1 + time2 + time3 + time4))
+    stdscr.addstr(3, 0, "\t Memory lookup: " + str(time1))
+    stdscr.addstr(4, 0, "\t Float to disp char: " + str(time2))
+    stdscr.addstr(5, 0, "\t Color lookup: " + str(time3))
+    stdscr.addstr(6, 0, "\t Actual drawtime: " + str(time4))
+    """
+
+    for i in range(width):
+        iTimes = i * width
+        for j in range(height):
+            index = iTimes + j
+            zValue = landStorage[index]
+            dispChar = floatToCharLand(zValue)
+            color = colorLookup(0, dispChar)
+            stdscr.addch(j, i, dispChar, color)
 
 def main(stdscr):
     #snoise2 is what we need to use
@@ -262,36 +483,41 @@ def main(stdscr):
     curses.start_color()
     curses.use_default_colors()
 
+    # Initialize terminal colors and save them for faster lookup later
     for i in range(0, curses.COLORS):
         curses.init_pair(i + 1, i, -1)
-
-    #curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
-    #curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+        termColorsList[i] = curses.color_pair(i)
 
     #movementSpeed = scale / width / 10
 
-    redraw(stdscr)
+    redraw(stdscr, True)
 
     # todo: eventually move to a library that supports key pressed/released
     # events to support multiple keys at once working properly
     start_time = 0
     while True:
         elapsed_time = time.time() - start_time
-        stdscr.addstr(4, 0, "FPS: " + str(1.0 / elapsed_time))
+        stdscr.addstr(8, 0, "FPS: " + str(1.0 / elapsed_time))
         keyPressed = stdscr.getkey()
         start_time = time.time()
         if keyPressed == "w":
             yOffset = yOffset - movementSpeed * ratio
+            #move(stdscr, 0, -1)
             redraw(stdscr)
         elif keyPressed == "s":
             yOffset = yOffset + movementSpeed * ratio
+            #move(stdscr, 0, 1)
             redraw(stdscr)
         elif keyPressed == "a":
             xOffset = xOffset - movementSpeed
-            redraw(stdscr)
+            moveLeftN(stdscr, -1)
+            #moveX(stdscr, -1)
+            #redraw(stdscr)
         elif keyPressed == "d":
             xOffset = xOffset + movementSpeed
-            redraw(stdscr)
+            #moveRightN(stdscr, 1)
+            moveX(stdscr, 1)
+            #redraw(stdscr)
         elif keyPressed == "=":
             if scale < maxScale:
                 scale = scale * 2.0

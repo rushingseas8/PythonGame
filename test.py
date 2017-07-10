@@ -41,12 +41,16 @@ worldPrecip = []
 # Variables needed for controlling major game mechanics
 global ratio
 global scale
+global minScale
+global maxScale
 global movementScale
 global movementSpeed
 
 ratio = 9.0 / 16.0
 scale = 64.0
-movementScale = 4.0
+minScale = 32.0
+maxScale = 4096.0
+movementScale = 6.0
 movementSpeed = movementScale / scale
 
 # World generation details
@@ -77,7 +81,7 @@ xOffset = 0
 yOffset = 0
 
 ###
-### Helper functions generally used in this program 
+### Helper functions generally used in this program
 ### (these don't typically rely on changing variables)
 ###
 
@@ -141,7 +145,7 @@ def octaves(x, y, iterations=1, scale=1.0, pers=2.0, normalize=True):
 
 # Returns the height of the land given any (x, y) coordinate.
 def heightLookup(x, y):
-    return octaves(landXOffset + x, landYOffset + y, iterations=8)   
+    return octaves(landXOffset + x, landYOffset + y, iterations=8)
 
 # Given an (x, y) coordinate, returns the temperature of that area.
 def tempLookup(x, y):
@@ -197,7 +201,7 @@ def colorLookup(biome, char):
 
 def redraw(stdscr):
     width = curses.COLS - 1
-    height = curses.LINES 
+    height = curses.LINES
 
     global scale
 
@@ -229,14 +233,14 @@ def redraw(stdscr):
     currentTemp = tempLookup(xOffset, yOffset)
     currentBiome = biomeLookup(xOffset, yOffset)
 
-    stdscr.addstr(0, 0, "World pos: (" + str(currentWorldX) + ", " + str(currentWorldY) + ") Map pos: (" + str(xOffset) + ", " + str(yOffset) + ")")
+    stdscr.addstr(0, 0, "World pos: (" + str(currentWorldX) + ", " + str(currentWorldY) + ")Map pos: (" + str(xOffset) + ", " + str(yOffset) + ") Scale: " + str(scale) + "x")
     stdscr.addstr(1, 0, "Height: " + str(currentHeight))
     stdscr.addstr(2, 0, "Biome: " + biomeNames[currentBiome])
     stdscr.addstr(3, 0, "Temperature: " + str(currentTemp))
 
     # The player in the middle.
     stdscr.addch(height / 2, width / 2, "X")
-    
+
     # We move the cursor so it's out of the way
     curses.curs_set(0)
 
@@ -253,7 +257,7 @@ def main(stdscr):
     global movementSpeed
 
     width = curses.COLS
-    height = curses.LINES 
+    height = curses.LINES
 
     curses.start_color()
     curses.use_default_colors()
@@ -273,7 +277,7 @@ def main(stdscr):
     start_time = 0
     while True:
         elapsed_time = time.time() - start_time
-        stdscr.addstr(5, 0, "FPS: " + str(1.0 / elapsed_time))
+        stdscr.addstr(4, 0, "FPS: " + str(1.0 / elapsed_time))
         keyPressed = stdscr.getkey()
         start_time = time.time()
         if keyPressed == "w":
@@ -289,13 +293,15 @@ def main(stdscr):
             xOffset = xOffset + movementSpeed
             redraw(stdscr)
         elif keyPressed == "=":
-            scale = scale * 1.2
-            movementSpeed = movementScale / scale
-            redraw(stdscr)
+            if scale < maxScale:
+                scale = scale * 2.0
+                movementSpeed = movementScale / scale
+                redraw(stdscr)
         elif keyPressed == "-":
-            scale = scale / 1.2
-            movementSpeed = movementScale / scale
-            redraw(stdscr)
+            if scale > minScale:
+                scale = scale / 2.0
+                movementSpeed = movementScale / scale
+                redraw(stdscr)
         elif keyPressed == "q":
             break
 

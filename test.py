@@ -165,7 +165,7 @@ def floatToChar(flt):
 # WR2 is the water ratio moved to the [-1.0, 1.0] range;
 # WR3 is the ratio to normalize [WR2, 1.0] -> [-1.0, 1.0].
 # Note for further optimization: The if statements provide some overhead,
-# and the "else" statement is the slowest single statement. 
+# and the "else" statement is the slowest single statement.
 WR2 = (waterRatio * 2.0) - 1.0
 WR3 = 1.0 / (1.0 - WR2)
 def floatToCharLand(flt):
@@ -261,11 +261,11 @@ def redraw(stdscr, first=False):
             # First time drawing, set up the dict
             if first:
                 #landStorage[hashScreen(i, j)] = zValue
-                landStorage[(i * width) + j] = zValue
+                landStorage[(j * width) + i] = zValue
 
             # TODO: move the array and only update the values that are new
             # on the very edges. Don't update the entire 2D array every time
-            arrayIndex = (y * width) + x
+            #arrayIndex = (y * width) + x
 
             dispChar = floatToCharLand(zValue)
             #dispChar = floatToChar(temp)
@@ -307,9 +307,8 @@ def moveRightN(stdscr, deltaX):
     # Shift values over
     deltaWidth = deltaX * width
     for i in range(0, width - deltaX):
-        iTimes = i * width
         for j in range(height):
-            index = iTimes + j
+            index = (j * width) + i
             #landStorage[hashScreen(i, j)] = landStorage[hashScreen(i + deltaX, j)]
             landStorage[index] = landStorage[deltaWidth + index]
     shiftEnd = time.time()
@@ -317,9 +316,8 @@ def moveRightN(stdscr, deltaX):
     genStart = time.time()
     # Generate new values
     for i in range(width - deltaX, width):
-        iTimes = i * width
         for j in range(height):
-            index = iTimes + j
+            index = (j * width) + i
             x = xOffset + ((i - width / 2) / scale)
             y = yOffset + ((j - height / 2) / scale / ratio)
 
@@ -347,17 +345,17 @@ def moveLeftN(stdscr, deltaX):
     # Shift values over
     for i in range(width, -deltaX, -1):
         for j in range(height):
-            landStorage[(i * height) + j] = landStorage[(i * height) + j + deltaX]
+            landStorage[(j * width) + i] = landStorage[(j * width) + i + deltaX]
     shiftEnd = time.time()
 
     genStart = time.time()
     # Generate new values
-    for i in range(0, deltaX):
+    for i in range(0, -deltaX):
         for j in range(height):
             x = xOffset + ((i - width / 2) / scale)
             y = yOffset + ((j - height / 2) / scale / ratio)
 
-            landStorage[(i * width) + j] = heightLookup(x, y)           
+            landStorage[(j * width) + i] = heightLookup(x, y)
 
     simpleRedraw(stdscr)
 
@@ -379,26 +377,28 @@ def moveX(stdscr, deltaX):
 
     if deltaX < 0:
         srtX = width
-        endX = -deltaX
+        endX = 0#-deltaX
         dirX = -1
         genSrtX = 0
-        genEndX = deltaX
+        genEndX = 0#deltaX
 
     # Shift over old values
     shiftStart = time.time()
     for i in range(srtX, endX, dirX):
-        iTimes = i * width
+        #iTimes = i * height
         for j in range(height):
-            index = iTimes + j
-            landStorage[index] = landStorage[deltaWidth + index] 
+            #index = iTimes + j
+            index = (j * width) + i
+            landStorage[index] = landStorage[index + deltaX]
     shiftEnd = time.time()
 
     # Generate new values
     genStart = time.time()
     for i in range(genSrtX, genEndX):
-        iTimes = i * width
+        #iTimes = i * height
         for j in range(height):
-            index = iTimes + j
+            #index = iTimes + j
+            index = (j * width) + i
             x = xOffset + ((i - width / 2) / scale)
             y = yOffset + ((j - height / 2) / scale / ratio)
 
@@ -459,9 +459,10 @@ def simpleRedraw(stdscr):
     """
 
     for i in range(width):
-        iTimes = i * width
+        #iTimes = i * width
         for j in range(height):
-            index = iTimes + j
+            #index = iTimes + j
+            index = (j * width) + i
             zValue = landStorage[index]
             dispChar = floatToCharLand(zValue)
             color = colorLookup(0, dispChar)

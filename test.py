@@ -7,6 +7,8 @@ import time
 import curses
 from curses import wrapper
 
+from operator import itemgetter
+
 import random
 import logging
 
@@ -23,11 +25,9 @@ global colorHeatmap
 global colorsList
 global biomeNames
 
-# @Deprecated
-#charLookup = "~.,-=+*#%@"
-
 # It's faster to lookup the chars in a dict than from a string.
 charDict = {'~':0, '.':1, ',':2, '-':3, '=':4, '+':5, '*':6, '#':7, '%':8, '@':9}
+# int -> char lookup. Use like charTuple[2].
 charTuple = tuple(list("~.,-=+*#%@"))
 
 
@@ -117,20 +117,58 @@ yOffset = 0
 ## this means updating them with values that change (fps, position, etc)
 ## as well as ensuring they stay in the same order between updates.
 ## The contract should state that the order is arbitrary but consistent.
-class Debug:
+#class Debug:
+#    currentCount = 0
+#    log = []
+#
+#    # Adds an arbitrary number of objects as a string to the debug stack.
+#    def addString(strings):
+#        finalString = ""
+#        for s in strings:
+#            finalString = finalString + str(s)
+#        log.append(finalString)
+
+##TODO: move to a module 'debug'
+##TODO: add a heirarchy system; something like Draw.Memory.Land should be 
+## displayed as nested inwards. Furthermore, something like Draw should then
+## hold the sum of its parts, and should also be displayed separately.
+global currentCount
+global log
+currentCount = 0
+log = []
+
+# Adds a new percent string to the debug logger.
+# Accepts a descriptive message and a time value- will display a percentage
+# of the total time this task took out of all the time between frames.
+def addPercentString(msg, val):
+    global currentCount
+    global log
+    log.append((msg, val))
+    currentCount += 1
+
+# Prints every debug percentage string we have right now
+def dump(stdscr, total_time):
+    global currentCount
+    global log
+
+    # Sort the log based on the amount of time each element took
+    log = sorted(log, key=itemgetter(1), reverse=True)
+
+    # Record the sum of all times recorded
+    sumTimes = 0
+    for i in range(len(log)):
+        msg = log[i][0]
+        val = log[i][1]
+        sumTimes += val
+        stdscr.addstr(i, 0, "[%s] " % "{:06.2%}".format(val / total_time) + str(msg) + " %.4f" % val)
+
+    # Print out "unmeasured time" (any difference between sum of all times and the total time), and total time.
+    stdscr.addstr(len(log), 0, "[%s] " % "{:06.2%}".format((total_time - sumTimes) / total_time) + "Unmeasured" + " %.4f" % (total_time - sumTimes))
+    stdscr.addstr(len(log) + 1, 0, "[100.0%] Total" + " %.4f" % total_time)
+
+    # Clear the log for next time.
     log = []
-
-    # Adds an arbitrary number of objects as a string to the debug stack.
-    def addString(strings):
-        finalString = ""
-        for s in strings:
-            finalString = finalString + str(s)
-        log.append(finalString)
-
-    # Prints all the debug strings to the provided screen.
-    def dump(stdscr):
-        for i in range(len(log)):
-            stdscr.addstr(i, 0, log[i])
+    currentCount = 0
 
 # Converts a float in the range [-1.0, 1.0] to a byte in the range [0, 255].
 def floatToByte(flt):
@@ -176,23 +214,24 @@ def floatToByteLand(flt):
 
 # Optimized version of float to char conversion.
 # WR2 is the water ratio moved to the [-1.0, 1.0] range;
-# WR3 is the ratio to normalize [WR2, 1.0] -> [-1.0, 1.0].
+# WR3 is the ratio to normalize [WR2, 1.0] -> [-1.0, 1.0]. 
+#   This is * by len(charLookup) to save a multiplication.
 # Note for further optimization: The if statements provide some overhead,
 # and the "else" statement is the slowest single statement.
 WR2 = (waterRatio * 2.0) - 1.0
-WR3 = 1.0 / (1.0 - WR2)
+WR3 = len(charTuple) / (1.0 - WR2)
 def floatToCharLand(flt):
     if flt < WR2:
         return "~"
-    elif flt < -1.0:
+    #elif flt < -1.0:
         #return charLookup[0]
-        return "~"
-    elif flt > 1.0:
+    #    return "~"
+    #elif flt > 1.0:
         #return charLookup[-1]
-        return "@"
+    #    return "@"
     else:
-        #return charLookup[int(len(charLookup) * (flt - WR2) * WR3)]
-        return charTuple[int(len(charTuple) * (flt - WR2) * WR3)]
+        return charTuple[int((flt - WR2) * WR3)]
+        #return charTuple[int(8 * (flt - WR2) * WR3)]
 
 # This runs several iterations of perlin noise and sums the values.
 def octaves(x, y, iterations=1, scale=1.0, pers=2.0, normalize=True):
@@ -385,39 +424,15 @@ def move(stdscr, deltaX, deltaY):
             biomeStorage[index] = biomeLookupByTP(tempStorage[index], 0)
     genEnd = time.time()
 
-    # Redraw
-    #drawStart = time.time()
-    drawTimes = simpleRedraw(stdscr)
-    #drawEnd = time.time()
-
     shiftTime = shiftEnd - shiftStart
     genTime = genEnd - genStart
-    totalTime = shiftTime + genTime + drawTimes[0]
 
-    stdscr.addstr(0, 0, "[%.2f%%] Shift time: %.4f" % (100.0 * shiftTime / totalTime, shiftTime) )
-    stdscr.addstr(1, 0, "[%.2f%%] Generate time: %.4f" % (100.0 * genTime / totalTime, genTime) )
-    stdscr.addstr(2, 0, "[%.2f%%] Draw time: %.4f" % (100.0 * drawTimes[0] / totalTime, drawTimes[0]) )
-    stdscr.addstr(3, 0, "[%.2f%%] | Memory lookup: %.4f" % (100.0 * drawTimes[1] / totalTime, drawTimes[1]) )
-    stdscr.addstr(4, 0, "[%.2f%%] | | Land: %.4f" % (100.0 * drawTimes[2] / totalTime, drawTimes[2]) )
-    stdscr.addstr(5, 0, "[%.2f%%] | | Temp: %.4f" % (100.0 * drawTimes[3] / totalTime, drawTimes[3]) )
-    stdscr.addstr(6, 0, "[%.2f%%] | | Biome: %.4f" % (100.0 * drawTimes[4] / totalTime, drawTimes[4]) )
-    stdscr.addstr(7, 0, "[%.2f%%] | Float to disp char: %.4f" % (100.0 * drawTimes[5] / totalTime, drawTimes[5]) )
-    stdscr.addstr(8, 0, "[%.2f%%] | Color lookup: %.4f" % (100.0 * drawTimes[6] / totalTime, drawTimes[6]) )
-    stdscr.addstr(9, 0, "[%.2f%%] | Drawing to screen: %.4f" % (100.0 * drawTimes[7] / totalTime, drawTimes[7]) )
+    #TODO: use module 'debug'
+    addPercentString("Shift time", shiftTime)
+    addPercentString("Generate time", genTime)
 
-    #stdscr.addstr(2, 0, "Draw time: " + str(drawEnd - drawStart))
-
-    """
-    stdscr.addstr(2, 0, "Draw time: " + str(time1 + time2 + time3 + time4))
-    stdscr.addstr(3, 0, "| Memory lookup: " + str(time1 + time1b + time1c))
-    stdscr.addstr(4, 0, "  | Land (list): " + str(time1))
-    stdscr.addstr(5, 0, "  | Temp (list): " + str(time1b))
-    stdscr.addstr(6, 0, "  | Biome (func): " + str(time1c))
-    stdscr.addstr(7, 0, "| Float to disp char: " + str(time2))
-    stdscr.addstr(8, 0, "| Color lookup: " + str(time3))
-    stdscr.addstr(9, 0, "| Actual drawtime: " + str(time4))
-    """
-
+    # Redraw
+    drawTimes = simpleRedraw(stdscr)
 
 #TODO: Add precip and biomes to their own lookup tables
 def simpleRedraw(stdscr):
@@ -470,8 +485,15 @@ def simpleRedraw(stdscr):
             end4 = time.time()
             time4 = time4 + (end4 - start4)
 
-    
-    return [(time1 + time2 + time3 + time3),time1 + time1b + time1c,time1,time1b,time1c,time2,time3,time4]
+    #TODO: use module 'debug'
+    #dump(stdscr)
+ 
+    addPercentString("Memory lookup - land", time1)
+    addPercentString("Memory lookup - temp", time1b)
+    addPercentString("Memory lookup - biome", time1c)
+    addPercentString("Float to Char conversion", time2)
+    addPercentString("Char color lookup", time3)
+    addPercentString("Drawing chars to screen", time4)
 
     """
     for i in range(height):
@@ -526,9 +548,17 @@ def main(stdscr):
     # events to support multiple keys at once working properly
     start_time = 0
     while True:
+        # Record any debugging information before waiting. 
+        # This is the last possible moment of the previous frame.
+
         elapsed_time = time.time() - start_time
+
+        dump(stdscr, total_time=elapsed_time)
         stdscr.addstr(10, 0, "FPS: " + str(1.0 / elapsed_time))
+        #stdscr.addstr(10, 0, "Time taken: " + str(elapsed_time))
+
         keyPressed = stdscr.getkey()
+
         start_time = time.time()
         if keyPressed == "w":
             #yOffset = yOffset - (movementSpeed * ratio)

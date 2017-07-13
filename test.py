@@ -22,57 +22,6 @@ import debug
 # Should we enable debug timing and logging? Set on program start.
 DEBUG = False
 
-# @Deprecated. Working on removing
-def redraw(stdscr, first=False):
-    width = curses.COLS
-    height = curses.LINES
-
-    global scale
-
-    for i in range(width):
-        for j in range(height):
-            x = xOffset + ((i - width / 2) / scale)
-            y = yOffset + ((j - height / 2) / scale / ratio)
-
-            zValue = helper.heightLookup(x, y)
-            temp = helper.tempLookup(x, y)
-            biome = helper.biomeLookupByTP(temp, 0)
-
-            # First time drawing, set up the initial storage dicts
-            if first:
-                #landStorage.insert((j * width) + i, zValue)
-                landStorage[(j * width) + i] = zValue
-                tempStorage[(j * width) + i] = temp
-                biomeStorage[(j * width) + i] = biome
-
-            dispChar = helper.floatToCharLand(zValue)
-            #dispChar = floatToChar(temp)
-            color = helper.colorLookup(biome, dispChar)
-
-            stdscr.addch(j, i, dispChar, color)
-            #stdscr.addch(j, i, floatToChar(snoise2((xOffset + i) / scale, (yOffset + j) / ratio / scale)), curses.color_pair(1))
-
-    # Here we draw some debugging information in the top-left
-    #currentWorldX = landXOffset + xOffset
-    #currentWorldY = landYOffset + yOffset
-
-    #currentHeight = helper.heightLookup(xOffset, yOffset)
-    #currentTemp = helper.tempLookup(xOffset, yOffset)
-    #currentBiome = helper.biomeLookup(xOffset, yOffset)
-
-    #stdscr.addstr(0, 0, "World pos: (" + str(currentWorldX) + ", " + str(currentWorldY) + ") Map pos: (" + str(xOffset * maxScale) + ", " + str(yOffset * maxScale / ratio) + ") Scale: " + str(scale) + "x")
-    #stdscr.addstr(1, 0, "Height: " + str(currentHeight))
-    #stdscr.addstr(2, 0, "Biome: " + biomeNames[currentBiome])
-    #stdscr.addstr(3, 0, "Temperature: " + str(currentTemp))
-
-    # The player in the middle.
-    #stdscr.addch(height / 2, width / 2, "X")
-
-    # We move the cursor so it's out of the way
-    #curses.curs_set(0)
-
-    stdscr.refresh()
-
 def move(stdscr, deltaX, deltaY):
     width = curses.COLS
     height = curses.LINES
@@ -118,6 +67,7 @@ def move(stdscr, deltaX, deltaY):
     # Shift over old values
     if DEBUG == True:
         shiftStart = time.time()
+        """
         for i in range(srtY, endY, dirY):
             iTimes = i * width
             for j in range(srtX, endX, dirX):
@@ -126,6 +76,29 @@ def move(stdscr, deltaX, deltaY):
                 landStorage[index] = landStorage[newIndex]
                 tempStorage[index] = tempStorage[newIndex]
                 biomeStorage[index] = biomeStorage[newIndex]
+        """
+        if deltaX > 0:
+            """
+            for index in range((width * height) - deltaX):
+                newIndex = index + deltaX
+                landStorage[index] = landStorage[newIndex]
+                tempStorage[index] = tempStorage[newIndex]
+                biomeStorage[index] = biomeStorage[newIndex]
+            """
+            # By being clever, you can attain O(1) performance on this. 
+            # Shifting left/right corresponds to a rotate left/right by N,
+            # which a collections.deque can do in O(1).
+            # Shifting up/down is a rotate left/right by (width * N); still not bad.
+            #
+            # However, this slows down random access to O(n), or O(n^3) average
+            # for every element in the array. Maybe it's time for two data structures?
+            #
+            # A deque of deques is also an option- O(1) shifts in all directions, but
+            # O(2n) access time worst case.
+            for i in range(deltaX):
+                landStorage.append(landStorage.pop(0))
+                tempStorage.append(tempStorage.pop(0))
+                biomeStorage.append(biomeStorage.pop(0))
         shiftEnd = time.time()
 
         # Generate new values

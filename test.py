@@ -3,6 +3,7 @@
 
 # Curses module for full terminal control
 import curses
+import curses.panel
 from curses import wrapper
 
 # Used for debugging timing
@@ -342,24 +343,26 @@ def main(stdscr):
         if keyPressed == "w":
             #yOffset = yOffset - (movementSpeed * ratio)
             yOffset = yOffset - movementSpeed / ratio
-            #move(stdscr, 0, -1)
             move(stdscr, 0, -1)
+            #####stdscr.insertln()
             #redraw(stdscr)
         elif keyPressed == "s":
             #yOffset = yOffset + (movementSpeed * ratio)
             yOffset = yOffset + movementSpeed / ratio
             #move(stdscr, 0, 1)
-            move(stdscr, 0, 1)
+            #####stdscr.deleteln()
             #redraw(stdscr)
         elif keyPressed == "a":
             xOffset = xOffset - movementSpeed * 2.0
             #moveLeftN(stdscr, -1)
             move(stdscr, -2, 0)
+            #####stdscr.delch(0, 0)
             #redraw(stdscr)
         elif keyPressed == "d":
             xOffset = xOffset + movementSpeed * 2.0
             #moveRightN(stdscr, 1)
             move(stdscr, 2, 0)
+            #####stdscr.insch(0, 0, "X")
             #redraw(stdscr)
         elif keyPressed == "=":
             #TODO: zoom is a bit buggy when moving around a lot

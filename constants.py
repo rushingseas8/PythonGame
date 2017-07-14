@@ -17,6 +17,8 @@ colorsList = (colorBasic, colorDesert, colorSnow)
 biomeNames = ["Plains", "Desert", "Snow"]
 
 ## Variables needed for controlling major game mechanics
+width = 10  # set me in main method
+height = 10 # weird value to easily see if something is wrong
 ratio = 9.0 / 16.0
 scale = 64.0
 minScale = 32.0
@@ -28,6 +30,9 @@ landStorage = []
 tempStorage = []
 biomeStorage = []
 precipStorage = {}
+
+# (experimental)
+dataStorage = []
 
 # World generation details
 randomSeed = 10

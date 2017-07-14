@@ -78,3 +78,6 @@ def colorLookup(biome, char):
         raise
 
 
+# (Experimental) How we store the data per display cell.
+def getData(x, y, string):
+    return 0

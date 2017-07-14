@@ -24,13 +24,6 @@ import debug
 DEBUG = False
 
 def move(stdscr, deltaX, deltaY):
-    width = curses.COLS
-    height = curses.LINES
-
-    global xOffset
-    global yOffset
-    global scale
-
     # Because of the various conversions, Y needs to be divided by ratio
     # and X needs to be multiplied by 2 to catch up.
     # Specifically, Y needs to move slower per pixel to avoid stretching,
@@ -38,6 +31,11 @@ def move(stdscr, deltaX, deltaY):
     #yOffset = yOffset + (deltaY * movementSpeed / ratio)
     #xOffset = xOffset + (deltaX * movementSpeed)
 
+    global xOffset
+    global yOffset
+ 
+    yOffset = yOffset + (deltaY * movementSpeed / ratio)
+    xOffset = xOffset + (deltaX * movementSpeed)
     srtX = 0
     endX = width - deltaX
     dirX = 1
@@ -68,7 +66,6 @@ def move(stdscr, deltaX, deltaY):
     # Shift over old values
     if DEBUG == True:
         shiftStart = time.time()
-        """
         for i in range(srtY, endY, dirY):
             iTimes = i * width
             for j in range(srtX, endX, dirX):
@@ -78,14 +75,8 @@ def move(stdscr, deltaX, deltaY):
                 tempStorage[index] = tempStorage[newIndex]
                 biomeStorage[index] = biomeStorage[newIndex]
         """
+        #TODO: make this work using insertln()/deleteln(), etc.
         if deltaX > 0:
-            """
-            for index in range((width * height) - deltaX):
-                newIndex = index + deltaX
-                landStorage[index] = landStorage[newIndex]
-                tempStorage[index] = tempStorage[newIndex]
-                biomeStorage[index] = biomeStorage[newIndex]
-            """
             # By being clever, you can attain O(1) performance on this. 
             # Shifting left/right corresponds to a rotate left/right by N,
             # which a collections.deque can do in O(1).
@@ -100,6 +91,27 @@ def move(stdscr, deltaX, deltaY):
                 landStorage.append(landStorage.pop(0))
                 tempStorage.append(tempStorage.pop(0))
                 biomeStorage.append(biomeStorage.pop(0))
+        """
+
+        # Below is a test using fast insert/deletes for shiftnig.
+        # To draw debug info/UI, you have to redraw over UI first using 
+        # existing data, then shift with below, then generate on top, and
+        # finally redraw the UI. 
+        """
+        if deltaY < 0:
+            stdscr.move(0, 0)
+            stdscr.insertln()
+        elif deltaY > 0:
+            stdscr.move(0, 0)
+            stdscr.deleteln()
+
+        if deltaX < 0:
+            for i in range(height):
+                stdscr.insch(i, 0, " ")
+        elif deltaX > 0:
+            for i in range(height):
+                stdscr.delch(i, 0)
+        """
         shiftEnd = time.time()
 
         # Generate new values
@@ -134,6 +146,7 @@ def move(stdscr, deltaX, deltaY):
         #TODO: use module 'debug'
         debug.addPercentString("Shift time", shiftTime)
         debug.addPercentString("Generate time", genTime)
+
     else:
         for i in range(srtY, endY, dirY):
             iTimes = i * width
@@ -168,18 +181,13 @@ def move(stdscr, deltaX, deltaY):
                 biomeStorage[index] = helper.biomeLookupByTP(tempStorage[index], 0)
 
     # Redraw
-    drawTimes = simpleRedraw(stdscr)
+    simpleRedraw(stdscr)
 
 #TODO: make zooming more efficient by sampling data points into new array,
 # then (background?) generate the actual values later. For now, brute force
 def zoom(stdscr, mult):
-    width = curses.COLS
-    height = curses.LINES
-
     global scale
-    global xOffset
-    global yOffset
-
+    global movementSpeed 
     #if (mult > 1.0 and scale < maxScale) or (mult < 1.0 and scale > minScale):
     scale = scale * mult
     movementSpeed = movementScale / scale
@@ -199,9 +207,6 @@ def zoom(stdscr, mult):
 
 #TODO: Add precip and biomes to their own lookup tables
 def simpleRedraw(stdscr):
-    width = curses.COLS
-    height = curses.LINES
-
     if DEBUG == True:
         time1 = 0
         time1b = 0
@@ -255,7 +260,6 @@ def simpleRedraw(stdscr):
         debug.addPercentString("Float to Char conversion", time2)
         debug.addPercentString("Char color lookup", time3)
         debug.addPercentString("Drawing chars to screen", time4)
-
     else:
         for i in range(height):
             for j in range(width):
@@ -275,24 +279,25 @@ def simpleRedraw(stdscr):
     currentTemp = helper.tempLookup(xOffset, yOffset)
     currentBiome = helper.biomeLookup(xOffset, yOffset)
 
-    stdscr.addstr(0, 0, "World pos: (" + str(currentWorldX) + ", " + str(currentWorldY) + ") Map pos: (" + str(xOffset * maxScale) + ", " + str(yOffset * maxScale / ratio) + ") Scale: " + str(scale) + "x")
-    stdscr.addstr(1, 0, "Height: " + str(currentHeight))
-    stdscr.addstr(2, 0, "Biome: " + biomeNames[currentBiome])
-    stdscr.addstr(3, 0, "Temperature: " + str(currentTemp))
+    debug.addInfoString("World pos: (" + str(currentWorldX) + ", " + str(currentWorldY) + ") Map pos: (" + str(xOffset * maxScale) + ", " + str(yOffset * maxScale / ratio) + ") Scale: " + str(scale) + "x")
+    debug.addInfoString("Height: " + str(currentHeight))
+    debug.addInfoString("Biome: " + biomeNames[currentBiome])
+    debug.addInfoString("Temperature: " + str(currentTemp))
+
 
     # The player in the middle.
     stdscr.addch(height / 2, width / 2, "X")
 
     # We move the cursor so it's out of the way
-    curses.curs_set(0)   
+    #curses.curs_set(0)   
     stdscr.refresh()
 
 def main(stdscr):
-    global ratio
-    global scale
+    global width
+    global height
+
     global xOffset
     global yOffset
-    global movementSpeed
 
     width = curses.COLS
     height = curses.LINES
@@ -334,38 +339,21 @@ def main(stdscr):
     
         if DEBUG == True:
             debug.dump(stdscr, {"total_time": elapsed_time})
-            stdscr.addstr(10, 0, "FPS: " + str(1.0 / elapsed_time))
+            debug.addInfoString("FPS: " + str(1.0 / elapsed_time))
         #stdscr.addstr(10, 0, "Time taken: " + str(elapsed_time))
 
         keyPressed = stdscr.getkey()
 
         start_time = time.time()
         if keyPressed == "w":
-            #yOffset = yOffset - (movementSpeed * ratio)
-            yOffset = yOffset - movementSpeed / ratio
             move(stdscr, 0, -1)
-            #####stdscr.insertln()
-            #redraw(stdscr)
         elif keyPressed == "s":
-            #yOffset = yOffset + (movementSpeed * ratio)
-            yOffset = yOffset + movementSpeed / ratio
-            #move(stdscr, 0, 1)
-            #####stdscr.deleteln()
-            #redraw(stdscr)
+            move(stdscr, 0, 1)
         elif keyPressed == "a":
-            xOffset = xOffset - movementSpeed * 2.0
-            #moveLeftN(stdscr, -1)
             move(stdscr, -2, 0)
-            #####stdscr.delch(0, 0)
-            #redraw(stdscr)
         elif keyPressed == "d":
-            xOffset = xOffset + movementSpeed * 2.0
-            #moveRightN(stdscr, 1)
             move(stdscr, 2, 0)
-            #####stdscr.insch(0, 0, "X")
-            #redraw(stdscr)
         elif keyPressed == "=":
-            #TODO: zoom is a bit buggy when moving around a lot
             zoom(stdscr, 2.0)
         elif keyPressed == "-":
             zoom(stdscr, 0.5)

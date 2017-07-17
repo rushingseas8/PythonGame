@@ -43,6 +43,8 @@ tempXOffset = random.random() * 10000
 tempYOffset = random.random() * 10000
 wetXOffset = random.random() * 10000
 wetYOffset = random.random() * 10000
+floraXOffset = random.random() * 10000
+floraYOffset = random.random() * 10000
 waterRatio = 0.45
 
 # Player-specific statistics

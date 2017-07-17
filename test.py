@@ -63,6 +63,8 @@ def move(stdscr, deltaX, deltaY):
         genSrtY = 0
         genEndY = -deltaY
 
+    #TODO: merge debug and normal code, and push "DEBUG == True" checks
+    #per each debug-related line. It's annoying to work w/ two copies of code.
     # Shift over old values
     if DEBUG == True:
         shiftStart = time.time()
@@ -125,6 +127,7 @@ def move(stdscr, deltaX, deltaY):
 
                 #TODO add precip to biome
                 landStorage[index] = helper.heightLookup(x, y)
+                #landStorage[index] = helper.floraLookup(x, y)
                 tempStorage[index] = helper.tempLookup(x, y)
                 biomeStorage[index] = helper.biomeLookupByTP(tempStorage[index], 0)
 
@@ -136,6 +139,7 @@ def move(stdscr, deltaX, deltaY):
                 y = yOffset + ((i - height / 2) / scale / ratio)
 
                 landStorage[index] = helper.heightLookup(x, y)
+                #landStorage[index] = helper.floraLookup(x, y)
                 tempStorage[index] = helper.tempLookup(x, y)
                 biomeStorage[index] = helper.biomeLookupByTP(tempStorage[index], 0)
         genEnd = time.time()
@@ -165,7 +169,8 @@ def move(stdscr, deltaX, deltaY):
                 y = yOffset + ((i - height / 2) / scale / ratio)
 
                 #TODO add precip to biome
-                landStorage[index] = helper.heightLookup(x, y)
+                #landStorage[index] = helper.heightLookup(x, y)
+                landStorage[index] = helper.floraLookup(x, y)
                 tempStorage[index] = helper.tempLookup(x, y)
                 biomeStorage[index] = helper.biomeLookupByTP(tempStorage[index], 0)
 
@@ -176,7 +181,8 @@ def move(stdscr, deltaX, deltaY):
                 x = xOffset + ((j - width / 2) / scale)
                 y = yOffset + ((i - height / 2) / scale / ratio)
 
-                landStorage[index] = helper.heightLookup(x, y)
+                landStorage[index] = helper.floraLookup(x, y)
+                #landStorage[index] = helper.heightLookup(x, y)
                 tempStorage[index] = helper.tempLookup(x, y)
                 biomeStorage[index] = helper.biomeLookupByTP(tempStorage[index], 0)
 
@@ -268,7 +274,10 @@ def simpleRedraw(stdscr):
                 temp = tempStorage[index]
                 biome = helper.biomeLookupByTP(temp, 0)
                 dispChar = helper.floatToCharLand(zValue)
-                color = helper.colorLookup(biome, dispChar)
+                #color = helper.colorLookup(biome, dispChar)
+                color = termColorsList[1]
+                if zValue > 0:
+                    color = termColorsList[0]
                 stdscr.insch(i, j, dispChar, color)
 
     # Here we draw some debugging information in the top-left
@@ -321,7 +330,8 @@ def main(stdscr):
 
             index = (i * width) + j
             
-            landStorage.append(helper.heightLookup(x, y))
+            #landStorage.append(helper.heightLookup(x, y))
+            landStorage.append(helper.floraLookup(x, y))
             tempStorage.append(helper.tempLookup(x, y))
             biomeStorage.append(helper.biomeLookupByTP(tempStorage[index], 0))
 

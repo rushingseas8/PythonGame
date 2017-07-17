@@ -77,6 +77,17 @@ def colorLookup(biome, char):
         print("Color lookup failed; invalid biome value or character given.")
         raise
 
+# Is there a tree at this position?
+def floraLookup(x, y):
+    # Random. Pros: good distribution, cons: slow, non-deterministic
+    #return round(random.random()) / 2.0
+
+    # Current standard. Good distr. and determ. but slow.
+    # Specifically, this is ~2x as slow as "heightLookup" per pixel.
+    random.seed((long(4096 * x) << 16) + 4096 * y)
+    return round(random.random()) / 2.0
+
+    
 
 # (Experimental) How we store the data per display cell.
 def getData(x, y, string):

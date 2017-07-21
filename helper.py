@@ -84,9 +84,15 @@ def floraLookup(x, y):
 
     # Current standard. Good distr. and determ. but slow.
     # Specifically, this is ~2x as slow as "heightLookup" per pixel.
-    random.seed((long(4096 * x) << 16) + 4096 * y)
-    return round(random.random()) / 2.0
-
+    #random.seed((long(4096 * x) << 16) + 4096 * y)
+    #return round(random.random()) / 2.0
+    #print(4096 * x, 4096 * y)
+    x *= 4096
+    y *= 4096
+    #return ((int(x * x * y * y) * hashConst)) >> 32) & 1
+    val = ((int(x * x * y * y) * hashConst) >> 32)
+    print(val)
+    return val & 1
     
 
 # (Experimental) How we store the data per display cell.

@@ -51,3 +51,5 @@ waterRatio = 0.45
 xOffset = 0
 yOffset = 0
 
+# Some extra constants
+hashConst = 2654435761 * 2654435761 * 2654435761 * 2654435761
